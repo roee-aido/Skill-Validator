@@ -1,6 +1,6 @@
 # Skill Review & Repair Agent
 
-> **Status: local implementation in progress.** Phases 0–6 run end to end on localhost with a rule-based **mock model**: no API calls, no cost, no deployment. The real model is not connected yet, and Question 5 has not been submitted.
+> **Status: working agent, run locally.** The full demo review runs end to end on localhost, both with a rule-based mock model (free) and with the real model `claude-opus-5-5` (experiment 1: $0.83, final status "completed with no open findings"). Nothing is deployed, and Question 5 has not been submitted.
 
 An agent that helps people review ready-made Claude skills before using them. The user signs in and uploads a skill (`SKILL.md`, a folder, or a ZIP). The agent statically analyzes its instructions, scripts and resources without running them. It maps each meaningful part by relevance and risk, and lets the user decide what to keep, remove or fix. After the corrected copy is re-checked, the user can download it with a review report and a change log. The original stays unchanged.
 
@@ -12,7 +12,7 @@ The agent offers review and repair support. It does not certify that a skill is 
 |---|---|---|---|
 | 3 | Agent specification | Documented (planning) | [SPEC.md](SPEC.md) |
 | 4 | Triggers, data flow and system architecture | Documented (planning) | [Architecture.md](Architecture.md) |
-| 5 (optional) | End-to-end agent build | In progress. Phases 0–6 implemented and tested locally with a mock model. Real model not connected. Not submitted | [demo/RESULTS.md](demo/RESULTS.md), [Architecture.md §15](Architecture.md) |
+| 5 (optional) | End-to-end agent build | Working agent, run end to end on the real model once (experiment 1). Not submitted | [demo/RESULTS.md](demo/RESULTS.md), [Architecture.md §15](Architecture.md) |
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -23,8 +23,8 @@ The agent offers review and repair support. It does not certify that a skill is 
 | 4 | Orchestrator, tasks, checkpoints, budget and resume, mock model | Done |
 | 5 | Corrected copy, structural check, re-check, reports | Done |
 | 6 | Hebrew RTL web interface and dashboards | Done |
-| 7 | Real model (Claude API) | Implemented. Experiment 1, purpose stage: completed on claude-opus-5-5 for $0.071 (see demo/RESULTS.md). Remaining stages not run yet |
-| 8 | Demo against the real model and submission | Not started |
+| 7 | Real model (Claude API) | Done. Experiment 1 ran the full demo review on claude-opus-5-5: final status "completed with no open findings", $0.83 in total (see demo/RESULTS.md) |
+| 8 | Demo against the real model and submission | Demo run once (experiment 1). Not submitted, not pushed |
 
 ## Repository map
 
@@ -38,7 +38,7 @@ The agent offers review and repair support. It does not certify that a skill is 
 | [infra/network-allowlist.yaml](infra/network-allowlist.yaml) | Destinations the agent worker may reach (D9). Not part of the agent configuration |
 | [prompts/](prompts/) | System prompt and one prompt per task stage |
 | [skill_validator/](skill_validator/) | Application code: web app, orchestrator, worker, agent loop, tools, intake, scanners, generator, reports |
-| [tests/](tests/) | 108 automated tests (107 pass, 1 skipped on Windows); none calls the API |
+| [tests/](tests/) | 112 automated tests (111 pass, 1 skipped on Windows); none calls the API |
 | [demo/](demo/) | Synthetic demo skill, demo and bad archives, expected and actual results |
 | [.env.example](.env.example) | Environment variable names only, no values |
 
