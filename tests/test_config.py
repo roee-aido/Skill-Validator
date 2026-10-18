@@ -62,7 +62,7 @@ def test_resume_rule_is_fixed(tmp_path):
 
 
 def test_secret_like_value_is_rejected(tmp_path):
-    p = write_variant(tmp_path, lambda d: d["secrets"].update(api_key_env="sk-ant-api03-abcdefghijklmnop"))
+    p = write_variant(tmp_path, lambda d: d["secrets"].update(api_key_env="sk-ant-FAKE-test-value-abcdefgh"))
     with pytest.raises(ConfigError, match="secret-like"):
         load_agent_config(p)
 

@@ -123,7 +123,7 @@ def test_secrets_are_masked_in_read_file(db, storage, user, agent_cfg, system_cf
     from skill_validator.db import FileRecord, ReviewSession
     from skill_validator.intake import collect_upload, write_source
 
-    skill = b'---\nname: s\n---\nUse key "sk-ant-api03-SECRETSECRETSECRET" here.\n'
+    skill = b'---\nname: s\n---\nUse key "sk-ant-FAKE-SECRETSECRETSECRET" here.\n'
     res = collect_upload([("SKILL.md", skill)], system_cfg.intake, system_cfg.supported_formats)
     review = ReviewSession(user_id=user.id)
     db.add(review)

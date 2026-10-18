@@ -139,7 +139,7 @@ def test_urls_are_not_reported_as_broken_paths():
 
 
 def test_secrets_are_masked_in_pattern_output():
-    text = 'API_KEY = "sk-ant-api03-ABCDEFGHIJKLMNOPQRST"\n'
+    text = 'API_KEY = "sk-ant-FAKE-ABCDEFGHIJKLMNOPQRST"\n'
     hits = search_patterns("config.py", text)
     assert any(h["category"] == "secret" for h in hits)
     assert all("ABCDEFGHIJ" not in h["text"] for h in hits)
