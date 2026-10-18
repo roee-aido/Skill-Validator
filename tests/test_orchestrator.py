@@ -121,6 +121,21 @@ def test_decision_rules_and_proposals(svc, svc_db, svc_user):
     assert current_decision(svc_db, by["concealment"].id) is None
 
 
+def test_license_can_always_be_kept_and_is_kept_by_default(svc, svc_db, svc_user):
+    from skill_validator.orchestrator import is_license_item, keeps_by_default
+
+    review = to_decisions(svc, svc_db, svc_user)
+    lic = next(i for i in svc_db.query(ReviewItem).filter_by(session_id=review.id) if is_license_item(i))
+    # The real model classified LICENSE as "not relevant, OK"; it must still be keepable (SPEC section 9).
+    lic.relevance = "not_relevant"
+    svc_db.commit()
+    assert "keep" in allowed_actions(lic, None) and "remove" in allowed_actions(lic, None)
+    assert keeps_by_default(lic)
+    reset_decision(svc_db, review, lic)
+    d = current_decision(svc_db, lic.id)
+    assert d.action == "keep" and d.is_default and d.approval_status == "approved"
+
+
 def test_rerun_of_a_task_does_not_duplicate_results(svc, svc_db, svc_user):
     review = to_decisions(svc, svc_db, svc_user)
     before = svc_db.query(ReviewItem).filter_by(session_id=review.id).count()

@@ -64,7 +64,7 @@ def plan_candidate(svc: Services, db: Session, review: ReviewSession) -> Candida
             whole = loc["start"] == 1 and loc["end"] >= total
             before = "\n".join(lines.get(path, [])[loc["start"] - 1 : loc["end"]])
             if d.action == "remove":
-                if whole and loc.get("role", "main") == "main":
+                if whole:  # the whole file goes, whether it is the main location or a reference
                     drop_files.add(path)
                     after = None
                 else:
@@ -85,12 +85,8 @@ def plan_candidate(svc: Services, db: Session, review: ReviewSession) -> Candida
     for path, file_edits in edits.items():
         if path in drop_files:
             continue
-        file_edits.sort()
-        for (s1, e1, _, i1), (s2, e2, _, i2) in zip(file_edits, file_edits[1:]):
-            if s2 <= e1 and i1 != i2:
-                raise WorkflowError(f"שני חלקים חופפים ב־{path} (שורות {s1}-{e1} ו־{s2}-{e2}). יש לשנות אחת ההחלטות.")
         new = list(lines[path])
-        for start, end, replacement, _ in sorted(file_edits, reverse=True):
+        for start, end, replacement, _ in sorted(_merge_edits(path, file_edits), reverse=True):
             new[start - 1 : end] = replacement
         texts[path] = "\n".join(_collapse_blank_runs(new)) + "\n"
 
@@ -102,6 +98,31 @@ def plan_candidate(svc: Services, db: Session, review: ReviewSession) -> Candida
     plan.broken = graph["broken"]
     plan.essential_unsupported = sorted(set(unsupported) & referenced)
     return plan
+
+
+def _merge_edits(path: str, file_edits: list[tuple]) -> list[tuple]:
+    """Merge overlapping removals; refuse any overlap that involves a replacement wording.
+
+    Two findings may point at the same line (for example a script's finding lists the line
+    that calls it). Removing that line twice is one removal. Replacing a line that another
+    decision removes or replaces is ambiguous, so the user must change one of the decisions.
+    """
+    merged: list[list] = []
+    for start, end, replacement, item_id in sorted(file_edits, key=lambda e: (e[0], e[1])):
+        if merged and start <= merged[-1][1]:
+            prev = merged[-1]
+            if replacement == [] and prev[2] == []:
+                prev[1] = max(prev[1], end)
+                continue
+            if not (prev[3] == item_id and replacement == prev[2]):
+                raise WorkflowError(
+                    f"שני חלקים חופפים ב־{path} (שורות {prev[0]}-{prev[1]} ו־{start}-{end}), "
+                    "ואחד מהם מוחלף בנוסח חדש. יש לשנות אחת ההחלטות."
+                )
+            prev[1] = max(prev[1], end)
+            continue
+        merged.append([start, end, replacement, item_id])
+    return [tuple(m) for m in merged]
 
 
 def _collapse_blank_runs(lines: list[str]) -> list[str]:

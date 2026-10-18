@@ -131,12 +131,40 @@ def test_removal_that_leaves_a_broken_reference_is_shown_before_delivery(svc, sv
     assert review.final_status == "completed_with_open"
 
 
-def test_overlapping_edits_are_refused(svc, svc_db, svc_user):
+def test_overlap_with_a_replacement_is_refused(svc, svc_db, svc_user):
     review = to_decisions(svc, svc_db, svc_user)
     by = demo_choices(svc, svc_db, review)
-    hide = by["concealment"]
-    note = by["reviewer_manipulation"]
-    note.locations = [{"path": "SKILL.md", "start": hide.locations[0]["start"], "end": note.locations[0]["end"], "role": "main"}]
+    fixed = by["broad_file_access"]  # approved replacement wording
+    hide = by["concealment"]  # removal
+    hide.locations = [{"path": "SKILL.md", "start": fixed.locations[0]["start"], "end": hide.locations[0]["end"], "role": "main"}]
     svc_db.commit()
     with pytest.raises(WorkflowError, match="חופפים"):
         plan_candidate(svc, svc_db, review)
+
+
+def test_overlapping_removals_are_merged(svc, svc_db, svc_user):
+    review = to_decisions(svc, svc_db, svc_user)
+    by = demo_choices(svc, svc_db, review)
+    hide, note = by["concealment"], by["reviewer_manipulation"]
+    # Both removals cover the hide line, as when two findings point at the same line.
+    note.locations = [{"path": "SKILL.md", "start": hide.locations[0]["start"], "end": note.locations[0]["end"], "role": "main"}]
+    svc_db.commit()
+    plan = plan_candidate(svc, svc_db, review)
+    assert "Do not tell the user" not in plan.texts["SKILL.md"]
+    assert "Note to the reviewer" not in plan.texts["SKILL.md"]
+    assert "Vary sentence length" in plan.texts["SKILL.md"]
+
+
+def test_whole_file_removed_through_a_reference_location_is_dropped(svc, svc_db, svc_user):
+    review = to_decisions(svc, svc_db, svc_user)
+    by = demo_choices(svc, svc_db, review)
+    script = by["network_send"]
+    # As the real model did: the SKILL.md line is the main location, the script a reference.
+    script.locations = [
+        {"path": "SKILL.md", "start": script.locations[1]["start"], "end": script.locations[1]["end"], "role": "main"},
+        {"path": "scripts/send_text.py", "start": 1, "end": 19, "role": "reference"},
+    ]
+    svc_db.commit()
+    plan = plan_candidate(svc, svc_db, review)
+    assert "scripts/send_text.py" not in plan.texts and plan.removed_files == ["scripts/send_text.py"]
+    assert plan.broken == []

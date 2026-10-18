@@ -242,8 +242,24 @@ def classification(item: ReviewItem) -> tuple[str, str]:
     return item.relevance, ("ok" if item.safety_status == "ok" else "risky")
 
 
+LICENSE_NAMES = ("LICENSE", "LICENCE", "NOTICE", "COPYING")
+
+
+def is_license_item(item: ReviewItem) -> bool:
+    """A finding whose main location is a licence or attribution file (SPEC section 9)."""
+    name = item.locations[0]["path"].rsplit("/", 1)[-1].upper()
+    return any(name == n or name.startswith(n + ".") for n in LICENSE_NAMES)
+
+
+def keeps_by_default(item: ReviewItem) -> bool:
+    """Relevant and OK parts, and licence or attribution files that were not found risky, default to keep."""
+    return classification(item) == ("relevant", "ok") or (is_license_item(item) and item.safety_status == "ok")
+
+
 def allowed_actions(item: ReviewItem, decision: UserDecision | None) -> set[str]:
     actions = set(ALLOWED_ACTIONS[classification(item)])
+    if is_license_item(item):
+        actions.add("keep")  # licences and attribution are preserved unless the user removes them
     if decision is not None and decision.no_safe_alternative:
         actions.add("keep_open")
     return actions
@@ -317,7 +333,7 @@ def reset_decision(db: Session, review: ReviewSession, item: ReviewItem) -> None
         db.delete(d)
     db.flush()
     review.decisions_version += 1
-    if classification(item) == ("relevant", "ok"):
+    if keeps_by_default(item):
         _add_default(db, review, item)
     db.commit()
 
@@ -543,7 +559,7 @@ def _after_task(svc: Services, db: Session, review: ReviewSession) -> None:
         review.status = "waiting_user"
     elif review.stage == "analyze" and _open_tasks(db, review, "analyze") == 0:
         for item in db.query(ReviewItem).filter_by(session_id=review.id).all():
-            if classification(item) == ("relevant", "ok") and current_decision(db, item.id) is None:
+            if keeps_by_default(item) and current_decision(db, item.id) is None:
                 _add_default(db, review, item)
         review.stage, review.status = "decisions", "waiting_user"
     elif review.stage == "decisions" and _open_tasks(db, review, "propose_fix") == 0:
