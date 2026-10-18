@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}הסקירות שלי · Skill Validator{% endblock %}
+{% block content %}
+<div class="row-between">
+  <h1>הסקירות שלי</h1>
+  <a class="button" href="/reviews/new">סקירה חדשה</a>
+</div>
+{% if not rows %}
+<section class="card"><p>עוד אין סקירות. העלו סקיל כדי להתחיל.</p></section>
+{% else %}
+<table class="table">
+  <thead><tr><th>סקיל</th><th>נוצרה</th><th>שלב</th><th>מצב</th><th>הוצאה</th><th>יתרה</th><th></th></tr></thead>
+  <tbody>
+  {% for row in rows %}{% set r = row.r %}
+  <tr>
+    <td><a href="/reviews/{{ r.id }}">{{ r.skill_name or "סקיל" }}</a></td>
+    <td class="ltr">{{ r.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+    <td>{{ STAGE_LABELS.get(r.stage, r.stage) }}</td>
+    <td>
+      {% if r.final_status %}<span class="chip {{ r.final_status }}">{{ FINAL_LABELS[r.final_status] }}</span>
+      {% else %}<span class="chip {{ r.status }}">{{ STATUS_LABELS.get(r.status, r.status) }}</span>{% endif %}
+      {% if r.status == "stopped" %}<span class="muted">({{ STOP_LABELS.get(r.stop_reason, r.stop_reason) }})</span>{% endif %}
+    </td>
+    <td class="ltr">${{ "%.4f"|format(r.spent_cost_total) }}</td>
+    <td class="ltr">${{ "%.4f"|format(row.remaining.cost_usd) }}</td>
+    <td>
+      <form method="post" action="/reviews/{{ r.id }}/delete" class="inline" onsubmit="return confirm('למחוק את הסקירה ואת כל הקבצים שלה?')">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="link danger">מחיקה</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

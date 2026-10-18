@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}סקירה חדשה · Skill Validator{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>סקירה חדשה</h1>
+  <p>הכלי בודק סקילים מוכנים ומסייע להכין גרסה מותאמת עם פחות סיכונים. אתם מחליטים מה לשמור, להסיר או לתקן.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="/reviews" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <fieldset>
+      <legend>מה להעלות (אחת מהאפשרויות)</legend>
+      <label>קובץ ZIP של הסקיל, או SKILL.md בודד
+        <input type="file" name="files" accept=".zip,.md">
+      </label>
+      <label>או תיקיית סקיל
+        <input type="file" name="files" webkitdirectory multiple>
+      </label>
+      <p class="muted">עד {{ intake.max_files }} קבצים, {{ (intake.max_total_bytes / 1048576)|round(1) }}MB אחרי פתיחה, עומק עד {{ intake.max_depth }} תיקיות.
+        קבצים בפורמט שאינו נתמך יסומנו "לא נבדק" ולא יועתקו לגרסה המתוקנת.</p>
+    </fieldset>
+    <label>תיאור השימוש הרצוי (רשות)
+      <textarea name="usage_description" rows="2" placeholder="למשל: לשכתב טקסטים שיווקיים בעברית"></textarea>
+    </label>
+    <div class="disclosure">
+      <strong>מה נשלח ולאן</strong>
+      <p>תוכן הקבצים שהעלית יישלח לניתוח ל־Claude API של Anthropic. הקוד לא יורץ, והקבצים לא יישלחו לשום יעד אחר.</p>
+      {% if mock_mode %}<p class="muted">במצב המדומה הנוכחי לא נשלח דבר: הניתוח מתבצע מקומית בכללים קבועים.</p>{% endif %}
+      <p class="muted">אין צורך למסור מפתחות API או סיסמאות של שירותים שהסקיל משתמש בהם.</p>
+      <label class="check"><input type="checkbox" name="disclosure" value="yes" required> קראתי ואני מאשר/ת לשלוח את התוכן לניתוח</label>
+    </div>
+    <button>העלאה והתחלת בדיקה</button>
+  </form>
+</section>
+{% endblock %}

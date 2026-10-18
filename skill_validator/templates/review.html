@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}{{ review.skill_name or "סקירה" }} · Skill Validator{% endblock %}
+{% block content %}
+<div class="row-between">
+  <h1>{{ review.skill_name or "סקירה" }}</h1>
+  <div>
+    <span class="chip">{{ STAGE_LABELS.get(review.stage, review.stage) }}</span>
+    {% if review.final_status %}<span class="chip {{ review.final_status }}">{{ FINAL_LABELS[review.final_status] }}</span>
+    {% else %}<span class="chip {{ review.status }}">{{ STATUS_LABELS.get(review.status, review.status) }}</span>{% endif %}
+  </div>
+</div>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+{# ------------------------------------------------ budget (D8) #}
+{% if review.stage != "rejected" %}
+<section class="card budget">
+  <h2>תקציב הסקירה{% if mock_mode %} <span class="muted">(מדומה)</span>{% endif %}</h2>
+  <table class="table compact ltr-nums">
+    <thead><tr><th></th><th>טוקנים</th><th>עלות (USD)</th><th>זמן עיבוד (דקות)</th></tr></thead>
+    <tbody>
+      <tr><th>הוצאה מצטברת</th><td>{{ "{:,}".format(budget.spent.tokens) }}</td><td>{{ "%.4f"|format(budget.spent.cost_usd) }}</td><td>{{ "%.2f"|format(budget.spent.processing_minutes) }}</td></tr>
+      <tr><th>תקרה</th><td>{{ "{:,}".format(budget.ceiling.tokens) }}</td><td>{{ "%.4f"|format(budget.ceiling.cost_usd) }}</td><td>{{ "%.2f"|format(budget.ceiling.processing_minutes) }}</td></tr>
+      <tr><th>יתרה</th><td>{{ "{:,}".format(budget.remaining.tokens) }}</td><td>{{ "%.4f"|format(budget.remaining.cost_usd) }}</td><td>{{ "%.2f"|format(budget.remaining.processing_minutes) }}</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">ההוצאה המצטברת אינה מתאפסת בעצירה או בהמשך. נדרשת יתרה של לפחות המגבלה למשימה אחת כדי להמשיך.</p>
+  {% if approvals %}<p class="muted">הגדלות תקרה שאושרו: {{ approvals|length }}</p>{% endif %}
+</section>
+{% endif %}
+
+{# ------------------------------------------------ rejected #}
+{% if review.stage == "rejected" %}
+<section class="card"><h2>ההעלאה נדחתה</h2><p class="error">{{ review.intake_error }}</p>
+  <p>לא נכתב שום קובץ מהחבילה. אפשר לתקן את החבילה ולהעלות מחדש.</p></section>
+{% endif %}
+
+{# ------------------------------------------------ running #}
+{% if review.status == "running" %}
+<section class="card"><h2>בעבודה…</h2>
+  <p>הושלמו {{ progress.done }} מתוך {{ progress.total }} משימות. הדף מתרענן אוטומטית.</p>
+  <p class="muted">המשימות רצות בתהליך ה־worker. אם שום דבר לא מתקדם, ודאו שהוא פועל.</p></section>
+{% endif %}
+
+{# ------------------------------------------------ stopped (T5) #}
+{% if review.status == "stopped" %}
+<section class="card warn">
+  <h2>הסקירה נעצרה: {{ STOP_LABELS.get(review.stop_reason, review.stop_reason) }}</h2>
+  <p>ההתקדמות נשמרה. הושלמו {{ progress.done }} מתוך {{ progress.total }} משימות. משימות שהושלמו לא ירוצו שוב.</p>
+  {% if budget.sufficient %}
+  <form method="post" action="/reviews/{{ review.id }}/resume">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button>המשך</button>
+  </form>
+  {% else %}
+  <p><strong>היתרה אינה מספיקה להמשך.</strong> נדרשת יתרה של לפחות {{ "{:,}".format(budget.per_task.tokens) }} טוקנים,
+    ${{ "%.2f"|format(budget.per_task.cost_usd) }} ו־{{ budget.per_task.processing_minutes }} דקות עיבוד. כדי להמשיך יש לאשר במפורש תקרה חדשה.</p>
+  <form method="post" action="/reviews/{{ review.id }}/ceiling" class="ceiling">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>תקרת טוקנים (עד {{ "{:,}".format(budget.max.tokens) }})
+      <input type="number" name="tokens" min="{{ budget.ceiling.tokens }}" max="{{ budget.max.tokens }}" value="{{ [budget.max.tokens, budget.spent.tokens + 2 * budget.per_task.tokens]|min }}" dir="ltr"></label>
+    <label>תקרת עלות USD (עד {{ budget.max.cost_usd }})
+      <input type="number" step="0.01" name="cost_usd" min="{{ budget.ceiling.cost_usd }}" max="{{ budget.max.cost_usd }}" value="{{ '%.2f'|format([budget.max.cost_usd, budget.spent.cost_usd + 2 * budget.per_task.cost_usd]|min) }}" dir="ltr"></label>
+    <label>תקרת זמן עיבוד בדקות (עד {{ budget.max.processing_minutes }})
+      <input type="number" step="0.5" name="processing_minutes" min="{{ budget.ceiling.processing_minutes }}" max="{{ budget.max.processing_minutes }}" value="{{ [budget.max.processing_minutes, budget.ceiling.processing_minutes]|max }}" dir="ltr"></label>
+    <label class="check"><input type="checkbox" name="confirm" value="yes" required> אני מאשר/ת להגדיל את תקרת התקציב של הסקירה</label>
+    <button>אישור תקרה חדשה והמשך</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ------------------------------------------------ purpose (T2) #}
+{% if review.stage == "purpose" and review.purpose_status == "proposed" and review.status == "waiting_user" %}
+<section class="card">
+  <h2>מטרת הסקיל</h2>
+  <p>זו המטרה שזוהתה מתוך החבילה. אפשר לאשר אותה או לתקן לפני שהסיווג ממשיך.</p>
+  <p class="muted">מקור: {{ review.purpose_evidence }}</p>
+  {% if review.purpose_question %}<p class="warn-text">שאלת הבהרה: {{ review.purpose_question }}</p>{% endif %}
+  {% if review.usage_description %}<p class="muted">השימוש שתיארת: {{ review.usage_description }}</p>{% endif %}
+  <form method="post" action="/reviews/{{ review.id }}/purpose">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="purpose" rows="3" required>{{ review.purpose }}</textarea>
+    <button>אישור המטרה והמשך לבדיקה</button>
+  </form>
+</section>
+{% endif %}
+{% if review.purpose_status == "confirmed" %}
+<p><strong>מטרה מאושרת:</strong> {{ review.purpose }}</p>
+{% endif %}
+
+{# ------------------------------------------------ decisions #}
+{% if review.stage == "decisions" %}
+<section class="card generate">
+  <h2>יצירת גרסה מתוקנת</h2>
+  {% if undecided %}
+  <p>נותרו <strong>{{ undecided }}</strong> חלקים שדורשים הכרעה או אישור נוסח.</p>
+  {% else %}<p>כל החלקים הוכרעו. אחרי היצירה תתבצע בדיקה חוזרת על העותק עצמו, ורק אז אפשר יהיה להוריד.</p>{% endif %}
+  {% if preview_error %}<p class="error">{{ preview_error }}</p>{% endif %}
+  {% if preview and preview.broken %}
+  <div class="warn-box"><strong>אזהרה: ההחלטות הנוכחיות ישאירו הפניות שבורות:</strong>
+    <ul class="ltr">{% for b in preview.broken %}<li>{{ b.from }}:{{ b.line }} → {{ b.token }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if preview and preview.not_copied %}<p class="muted">לא יועתקו (לא נבדקו): <span class="ltr">{{ preview.not_copied|join(", ") }}</span></p>{% endif %}
+  <form method="post" action="/reviews/{{ review.id }}/generate">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button {% if undecided or preview_error or review.status == "running" %}disabled{% endif %}>צור גרסה מתוקנת</button>
+  </form>
+</section>
+{% endif %}
+
+{# ------------------------------------------------ cards #}
+{% if cards %}
+<h2>חלקים שנמצאו ({{ cards|length }})</h2>
+{% for c in cards %}{% set it = c.item %}{% set d = c.decision %}
+<article class="card item {% if c.pending %}pending{% endif %}" id="item-{{ it.id }}">
+  <div class="row-between">
+    <h3>{{ it.title }}</h3>
+    <span class="chip sev-{{ it.severity }}">{{ SEVERITY_LABELS[it.severity] }}</span>
+  </div>
+  <p>
+    <span class="chip">{{ RELEVANCE_LABELS[it.relevance] }}</span>
+    <span class="chip safety-{{ it.safety_status }}">{{ SAFETY_LABELS[it.safety_status] }}</span>
+    · {{ it.reason }}
+  </p>
+  <details>
+    <summary>פרטים</summary>
+    <ul>
+      <li>מיקום: {% for l in it.locations %}<code class="ltr">{{ l.path }}:{{ l.start }}{% if l.end != l.start %}-{{ l.end }}{% endif %}</code>{% if l.role == "reference" %} (הפניה){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</li>
+      <li>ודאות: {{ CERTAINTY_LABELS[it.certainty] }} · סוג ליקוי: <code class="ltr">{{ it.defect_type }}</code></li>
+      {% if it.dependencies %}<li>תלויות: {{ it.dependencies }}</li>{% endif %}
+      {% if it.impact %}<li>השפעה צפויה של שינוי: {{ it.impact }}</li>{% endif %}
+      <li>המלצה: {{ ACTION_LABELS.get(it.recommendation, it.recommendation) }}</li>
+    </ul>
+    <pre class="code" dir="ltr">{{ it.evidence }}</pre>
+  </details>
+
+  <div class="decision">
+    {% if d %}
+      <p>החלטה: <strong>{{ ACTION_LABELS.get(d.action, d.action) }}</strong>{% if d.is_default %} (ברירת מחדל){% endif %}
+      {% if d.approval_status == "approved" %}<span class="chip ok">מאושר</span>{% endif %}</p>
+      {% if d.approval_status == "proposal_pending" %}<p class="muted">מכין נוסח מוצע…</p>{% endif %}
+      {% if d.approval_status == "proposed" and c.diff %}
+        <p>נוסח מוצע: {{ d.proposal_explanation }}</p>
+        <pre class="diff" dir="ltr">{% for kind, line in c.diff %}<span class="{{ kind }}">{{ line }}</span>
+{% endfor %}</pre>
+        {% if review.stage == "decisions" %}
+        <form method="post" action="/reviews/{{ review.id }}/items/{{ it.id }}/approve" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button>אישור הנוסח</button></form>
+        {% endif %}
+      {% endif %}
+      {% if d.approval_status == "no_alternative" %}
+        <p class="warn-text">{{ d.proposal_explanation }}</p>
+      {% endif %}
+    {% else %}
+      <p class="muted">טרם נבחרה פעולה. המלצה: {{ ACTION_LABELS.get(it.recommendation, it.recommendation) }}.</p>
+    {% endif %}
+    {% if review.stage == "decisions" %}
+    <div class="actions">
+      {% for a in c.actions %}
+      <form method="post" action="/reviews/{{ review.id }}/items/{{ it.id }}/decision" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ a }}">
+        <button class="{% if d and d.action == a %}selected{% else %}secondary{% endif %}">{{ ACTION_LABELS[a] }}</button>
+      </form>
+      {% endfor %}
+      {% if d and not d.is_default %}
+      <form method="post" action="/reviews/{{ review.id }}/items/{{ it.id }}/reset" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">ביטול הבחירה</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if c.validation %}
+      <p>בדיקה חוזרת: <strong>{{ OUTCOME_LABELS.get(c.validation.outcome, c.validation.outcome) }}</strong>. {{ c.validation.evidence }}</p>
+      {% for issue in c.validation.new_issues %}<p class="warn-text ltr">{{ issue }}</p>{% endfor %}
+    {% endif %}
+  </div>
+</article>
+{% endfor %}
+{% endif %}
+
+{# ------------------------------------------------ delivered #}
+{% if review.stage == "delivered" %}
+<section class="card final {{ review.final_status }}">
+  <h2>{{ FINAL_LABELS[review.final_status] }}</h2>
+  <p>מצב ההשלמה אינו הבטחת בטיחות. הדוח מפרט מה נבדק, מה תוקן ומה עדיין אינו ידוע.</p>
+  {% if structural %}
+  <p>בדיקה מבנית של העותק: {{ "עברה" if structural.outcome == "passed" else "נמצאו בעיות" }}.</p>
+  {% for issue in structural.new_issues %}<p class="warn-text ltr">{{ issue }}</p>{% endfor %}
+  {% endif %}
+  <ul class="downloads">
+    {% for a in artifacts %}<li><a class="button" href="/reviews/{{ review.id }}/download/{{ a.kind }}">הורדת {{ DOWNLOAD_NAMES[a.kind] }}</a></li>{% endfor %}
+  </ul>
+  <p class="muted">הפקת החבילה אינה מתקינה או מפעילה אותה. המקור נשמר בנפרד ללא שינוי.</p>
+</section>
+{% endif %}
+
+{# ------------------------------------------------ coverage #}
+{% if files %}
+<section class="card">
+  <h2>כיסוי הבדיקה</h2>
+  <table class="table compact">
+    <thead><tr><th>קובץ</th><th>סוג</th><th>מצב</th></tr></thead>
+    <tbody>{% for f in files %}<tr><td class="ltr">{{ f.relative_path }}</td><td class="ltr">{{ f.type }}</td><td>{{ COVERAGE_LABELS.get(f.coverage_status, f.coverage_status) }}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

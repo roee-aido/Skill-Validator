@@ -509,6 +509,25 @@ def run_until_idle(svc: Services, max_tasks: int = 500) -> int:
     return count
 
 
+# ---------------------------------------------------------------- deletion
+
+
+def delete_review(svc: Services, db: Session, review: ReviewSession) -> None:
+    """Delete a review, all its rows and all three storage areas (SPEC section 10)."""
+    from .db import OutputArtifact
+
+    if review.status == "running":
+        raise WorkflowError("לא ניתן למחוק סקירה בזמן שמשימות רצות")
+    sid = review.id
+    for model in (UserDecision, ValidationResult, OutputArtifact, BudgetApproval, AgentRun, Checkpoint):
+        db.query(model).filter_by(session_id=sid).delete(synchronize_session=False)
+    for model in (ReviewItem, ReviewTask, FileRecord):
+        db.query(model).filter_by(session_id=sid).delete(synchronize_session=False)
+    db.query(ReviewSession).filter_by(id=sid).delete(synchronize_session=False)
+    db.commit()
+    svc.storage.delete_review(review.user_id, sid)
+
+
 # ---------------------------------------------------------------- T5: resume (D8)
 
 

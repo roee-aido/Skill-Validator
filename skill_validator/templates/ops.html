@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}תפעול · Skill Validator{% endblock %}
+{% block content %}
+<h1>דשבורד תפעול</h1>
+<p class="muted">מטא־דאטה מצטברת בלבד. אין כאן תוכן סקילים או קטעי ראיה (O10).</p>
+<div class="grid">
+  <section class="card"><h2>סקירות</h2><p class="big">{{ n_reviews }}</p>
+    <ul>{% for k, v in by_status.items() %}<li>{{ STATUS_LABELS.get(k, k) }}: {{ v }}</li>{% endfor %}</ul>
+    <ul>{% for k, v in by_final.items() if k %}<li>{{ FINAL_LABELS.get(k, k) }}: {{ v }}</li>{% endfor %}</ul>
+  </section>
+  <section class="card"><h2>ממצאים לפי חומרה</h2>
+    <ul>{% for k, v in by_severity.items() %}<li>{{ SEVERITY_LABELS.get(k, k) }}: {{ v }}</li>{% endfor %}</ul>
+    <h3>לפי סוג</h3>
+    <ul class="ltr">{% for k, v in by_defect.items() %}<li>{{ k }}: {{ v }}</li>{% endfor %}</ul>
+  </section>
+  <section class="card"><h2>הרצות סוכן</h2>
+    <ul class="ltr">{% for k, v in runs.items() %}<li>{{ k }}: {{ v }}</li>{% endfor %}</ul>
+    <p>הגדלות תקרה שאושרו: {{ approvals }}</p>
+    <p>משימות שלא נבדקו: {{ skipped }}</p>
+    <p>עלות ממוצעת לסקירה: <span class="ltr">${{ "%.4f"|format(avg_cost) }}</span>{% if mock_mode %} (מדומה){% endif %}</p>
+  </section>
+</div>
+<section class="card">
+  <h2>לפי גרסת קונפיגורציה ומודל</h2>
+  <table class="table ltr">
+    <thead><tr><th>config</th><th>model</th><th>runs</th><th>cost USD</th><th>tokens</th></tr></thead>
+    <tbody>{% for cv, mid, n, cost, toks in per_model %}
+      <tr><td>{{ cv }}</td><td>{{ mid }}</td><td>{{ n }}</td><td>{{ "%.4f"|format(cost or 0) }}</td><td>{{ toks or 0 }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</section>
+{% endblock %}
