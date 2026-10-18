@@ -43,6 +43,37 @@ DEMO_ZIP = PROJECT_ROOT / "demo" / "human-writing-skill.zip"
 
 
 @pytest.fixture
+def svc(tmp_path, agent_cfg, system_cfg):
+    from skill_validator.orchestrator import Services, make_brain
+
+    engine = make_engine(tmp_path / "svc" / "app.db")
+    services = Services(
+        db_factory=make_session_factory(engine),
+        storage=Storage(tmp_path / "svc"),
+        agent_cfg=agent_cfg,
+        system_cfg=system_cfg,
+        brain_factory=make_brain,
+    )
+    yield services
+    engine.dispose()
+
+
+@pytest.fixture
+def svc_db(svc):
+    s = svc.db_factory()
+    yield s
+    s.close()
+
+
+@pytest.fixture
+def svc_user(svc_db):
+    u = User(email="owner@example.test")
+    svc_db.add(u)
+    svc_db.commit()
+    return u
+
+
+@pytest.fixture
 def demo_review(db, storage, user, system_cfg):
     """A review with the demo skill already in the source area (intake only, no tasks)."""
     from skill_validator.db import FileRecord, ReviewSession
