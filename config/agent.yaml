@@ -1,25 +1,29 @@
-# Agent configuration for the real model (Anthropic, Claude API + Tool Runner).
+# Agent configuration for the real model (Anthropic, Claude API + SDK Tool Runner).
 #
-# Status: NOT RUNNABLE YET. Model, effort, prices and budgets are open decisions
-# (O1, O5, O14). They will be filled in only after verifying model availability,
-# capabilities and prices against the official documentation (before Phase 7).
-# The loader rejects any "<TBD>" value, so this file cannot start a review today.
+# Values approved for experiment 1 (19.10.2026). Verified against the official docs on 19.10.2026:
+#   models:  https://platform.claude.com/docs/en/about-claude/models/overview
+#   pricing: https://platform.claude.com/docs/en/about-claude/pricing
+#   effort:  https://platform.claude.com/docs/en/build-with-claude/effort
 #
-# No secrets in this file: only the NAME of the environment variable that holds
-# the API key. The value is injected at runtime from outside the repository.
+# No secrets in this file: only the NAME of the environment variable that holds the API key.
+# The worker also requires SV_TOTAL_BUDGET_USD (approved total cap for all paid runs: 5).
+# No automatic model fallback: no `fallbacks` parameter is sent, and a response from any
+# other model stops the task.
 
-config_version: "0.1.0"
-agent_name: "Skill Validator"          # O12
+config_version: "1.0.0-exp1"
+agent_name: "Skill Validator"
 
 model:
   provider: anthropic                  # D1
-  model_id: "<TBD>"                    # O1 - after availability check
-  effort: "<TBD>"                      # O1 - only if the chosen model supports it; else null
-  max_output_tokens: "<TBD>"           # O5
-  pricing:                             # USD per million tokens, from official docs
-    input_per_mtok: "<TBD>"
-    output_per_mtok: "<TBD>"
-    source: "<TBD>"                    # URL + date checked
+  model_id: claude-opus-5-5            # O1 - approved for experiment 1
+  effort: medium                       # O1 - approved; also the API default for this model
+  max_output_tokens: 16000             # thinking + response; thinking is always on for this model
+  pricing:                             # USD per million tokens
+    input_per_mtok: 4.0
+    output_per_mtok: 20.0              # thinking tokens are billed as output
+    cache_write_per_mtok: 5.0          # 5-minute cache write
+    cache_read_per_mtok: 0.20
+    source: "platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-19"
 
 secrets:
   api_key_env: ANTHROPIC_API_KEY       # name only; the value never lives in the repo
@@ -45,24 +49,24 @@ stages:
     tools: [list_files, read_file, search_patterns, get_references, compare_versions, record_validation]
     read_areas: [source, candidate]
 
-limits:                                # O5 / O14
-  per_task:
-    tokens: "<TBD>"
-    cost_usd: "<TBD>"
-    processing_minutes: "<TBD>"
+limits:                                # O5 - approved for experiment 1
+  per_task:                            # also the balance required to continue (D8)
+    tokens: 150000
+    cost_usd: 0.75
+    processing_minutes: 5
   per_review:                          # cumulative ceilings; never reset on resume (D8)
-    tokens: "<TBD>"
-    cost_usd: "<TBD>"
-    processing_minutes: "<TBD>"
-  max_approved_ceiling:                # highest ceiling a user may approve
-    tokens: "<TBD>"
-    cost_usd: "<TBD>"
-    processing_minutes: "<TBD>"
+    tokens: 1500000
+    cost_usd: 3.0
+    processing_minutes: 20
+  max_approved_ceiling:                # highest ceiling a user may approve; equals the total cap
+    tokens: 2500000
+    cost_usd: 5.0
+    processing_minutes: 30
 
-stop_conditions:                       # O5
-  max_agent_turns_per_task: "<TBD>"
-  max_tool_calls_per_task: "<TBD>"
-  max_attempts_per_task: "<TBD>"
+stop_conditions:
+  max_agent_turns_per_task: 12
+  max_tool_calls_per_task: 30
+  max_attempts_per_task: 2
   on_budget_exceeded: checkpoint_and_mark_partial
   on_tool_error: retry_then_checkpoint
   on_model_error_or_refusal: checkpoint_and_mark_partial

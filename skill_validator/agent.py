@@ -32,6 +32,8 @@ class ModelFailure(Exception):
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
 
 @dataclass
@@ -47,18 +49,26 @@ class Meter:
 
     def cost_of(self, u: Usage) -> float:
         p = self.cfg.model.pricing
-        return u.input_tokens * p.input_per_mtok / 1e6 + u.output_tokens * p.output_per_mtok / 1e6
+        write = p.cache_write_per_mtok or p.input_per_mtok
+        read = p.cache_read_per_mtok or p.input_per_mtok
+        return (
+            u.input_tokens * p.input_per_mtok
+            + u.cache_creation_input_tokens * write
+            + u.cache_read_input_tokens * read
+            + u.output_tokens * p.output_per_mtok
+        ) / 1e6
 
     def elapsed_minutes(self) -> float:
         return (time.monotonic() - self.started) / 60
 
     def charge(self, u: Usage) -> None:
         cost = self.cost_of(u)
-        self.input_tokens += u.input_tokens
+        all_input = u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens
+        self.input_tokens += all_input
         self.output_tokens += u.output_tokens
         self.cost_usd += cost
         r = self.review
-        r.spent_tokens_total += u.input_tokens + u.output_tokens
+        r.spent_tokens_total += all_input + u.output_tokens
         r.spent_cost_total += cost
         self.check()
 
@@ -80,6 +90,9 @@ class Meter:
 
 def run_agent_task(ctx: ToolContext, brain, cfg: AgentConfig, meter: Meter, system_prompt: str, task_prompt: str) -> None:
     """Drive one task to completion or raise BudgetExceeded / LimitReached / ModelFailure."""
+    if hasattr(brain, "run"):  # the real model drives its own loop with the same checks
+        brain.run(ctx, cfg, meter, system_prompt, task_prompt)
+        return
     stop = cfg.stop_conditions
     conversation = [system_prompt, task_prompt]
     steps = brain.steps(ctx)

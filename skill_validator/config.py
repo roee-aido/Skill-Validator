@@ -24,6 +24,9 @@ class Strict(BaseModel):
 class Pricing(Strict):
     input_per_mtok: PositiveFloat
     output_per_mtok: PositiveFloat
+    # Prompt-cache prices. When omitted, cache tokens are charged at the input price.
+    cache_write_per_mtok: PositiveFloat | None = None
+    cache_read_per_mtok: PositiveFloat | None = None
     source: str
 
 

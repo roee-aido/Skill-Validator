@@ -80,7 +80,8 @@ STATUS_LABELS = {
 STOP_LABELS = {
     "budget_exceeded": "התקציב של הסקירה נוצל",
     "budget_insufficient": "היתרה אינה מספיקה להמשך",
-    "model_error": "שגיאה בשירות המודל",
+    "model_error": "שגיאה או סירוב של שירות המודל",
+    "total_budget_cap": "התקרה הכוללת להרצות בתשלום נוצלה",
     "source_changed": "המקור השתנה",
 }
 DOWNLOAD_NAMES = {"package_zip": "חבילה מתוקנת (ZIP)", "review_md": "REVIEW.md", "changes_md": "CHANGES.md"}

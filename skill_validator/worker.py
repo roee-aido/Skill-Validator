@@ -7,6 +7,7 @@ It is a local protection layer, not infrastructure isolation (see netguard.py).
 """
 
 import argparse
+import os
 import time
 
 from . import netguard
@@ -23,6 +24,11 @@ def main() -> None:
 
     guard = netguard.install()
     svc = build_services(args.config, args.data_root)
+    key_env = svc.agent_cfg.secrets.api_key_env
+    if svc.agent_cfg.model.provider != "mock" and not os.environ.get(key_env or ""):
+        raise SystemExit(f"{key_env} is not set in this terminal; the real model cannot be called")
+    if svc.total_cap_usd is not None:
+        print(f"total cap for paid runs: ${svc.total_cap_usd:.2f}", flush=True)
     print(f"worker ready: config {svc.agent_cfg.config_version}, model {svc.agent_cfg.model.model_id}, "
           f"network allowlist {sorted(guard.allowed)}", flush=True)
     while True:

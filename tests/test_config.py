@@ -26,9 +26,21 @@ def test_mock_config_loads():
     assert len(cfg.file_sha256) == 64
 
 
-def test_real_config_is_not_runnable_until_open_decisions_are_closed():
+def test_real_config_has_the_approved_experiment_values():
+    cfg = load_agent_config(PROJECT_ROOT / "config" / "agent.yaml")
+    assert cfg.model.provider == "anthropic"
+    assert cfg.model.model_id == "claude-opus-5-5"
+    assert cfg.model.effort == "medium"
+    assert cfg.secrets.api_key_env == "ANTHROPIC_API_KEY"
+    assert cfg.limits.per_review.cost_usd == 3.0
+    assert cfg.limits.max_approved_ceiling.cost_usd == 5.0
+    assert (cfg.model.pricing.input_per_mtok, cfg.model.pricing.output_per_mtok) == (4.0, 20.0)
+
+
+def test_open_values_block_loading(tmp_path):
+    p = write_variant(tmp_path, lambda d: d["model"].update(model_id="<TBD>"))
     with pytest.raises(ConfigError, match="<TBD>"):
-        load_agent_config(PROJECT_ROOT / "config" / "agent.yaml")
+        load_agent_config(p)
 
 
 def test_unknown_tool_is_rejected(tmp_path):

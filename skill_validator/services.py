@@ -15,6 +15,9 @@ def build_services(config_path: str | None = None, data_root: str | None = None)
         raise SystemExit("Set SV_CONFIG (for local testing: config/agent.mock.yaml)")
     agent_cfg = load_agent_config(path)
     system_cfg = load_system_config()
+    total_cap = os.environ.get("SV_TOTAL_BUDGET_USD")
+    if agent_cfg.model.provider != "mock" and not total_cap:
+        raise SystemExit("A real model needs SV_TOTAL_BUDGET_USD: the approved total cap for all paid runs")
     root = PROJECT_ROOT / (data_root or system_cfg.storage.root)
     engine = make_engine(root / "app.db")
     return Services(
@@ -23,4 +26,5 @@ def build_services(config_path: str | None = None, data_root: str | None = None)
         agent_cfg=agent_cfg,
         system_cfg=system_cfg,
         brain_factory=make_brain,
+        total_cap_usd=float(total_cap) if total_cap else None,
     )

@@ -41,6 +41,8 @@ class Services:
     agent_cfg: AgentConfig
     system_cfg: SystemConfig
     brain_factory: object  # callable(AgentConfig) -> brain
+    # Optional cap on the total spend of all real-model runs (all reviews together).
+    total_cap_usd: float | None = None
 
 
 def make_brain(cfg: AgentConfig):
@@ -48,7 +50,9 @@ def make_brain(cfg: AgentConfig):
         from .mock_model import MockBrain
 
         return MockBrain()
-    raise NotImplementedError("The real model is wired in Phase 7, after the model and budget are approved.")
+    from .anthropic_model import AnthropicBrain
+
+    return AnthropicBrain(cfg)
 
 
 def now():
@@ -91,6 +95,25 @@ def budget_sufficient(review: ReviewSession, cfg: AgentConfig) -> bool:
         and rem["cost_usd"] >= need.cost_usd
         and rem["processing_minutes"] >= need.processing_minutes
     )
+
+
+def real_model_spend(db: Session) -> float:
+    """Total cost of every run that used a real model (mock runs are simulated and excluded)."""
+    rows = db.query(AgentRun.cost_usd).filter(~AgentRun.model_id.like("mock%")).all()
+    return float(sum(r[0] or 0.0 for r in rows))
+
+
+def total_cap_allows_task(svc: Services, db: Session) -> bool:
+    """A new task may start only if a worst-case task still fits under the total cap.
+
+    Worst case = the per-task cost limit plus one more full-length response, because limits are
+    checked after each response.
+    """
+    if svc.total_cap_usd is None or svc.agent_cfg.model.provider == "mock":
+        return True
+    m = svc.agent_cfg.model
+    worst_task = svc.agent_cfg.limits.per_task.cost_usd + m.max_output_tokens * m.pricing.output_per_mtok / 1e6
+    return real_model_spend(db) + worst_task <= svc.total_cap_usd
 
 
 # ---------------------------------------------------------------- checkpoints
@@ -359,6 +382,10 @@ def run_task(svc: Services, db: Session, task: ReviewTask) -> str:
         stop_review(db, review, "budget_insufficient")
         db.commit()
         return "budget_insufficient"
+    if not total_cap_allows_task(svc, db):
+        stop_review(db, review, "total_budget_cap")
+        db.commit()
+        return "total_budget_cap"
 
     task.status, task.attempts = "running", task.attempts + 1
     db.commit()
