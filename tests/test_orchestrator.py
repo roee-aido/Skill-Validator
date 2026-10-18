@@ -239,17 +239,93 @@ def test_model_error_stops_review_and_resume_retries(svc, svc_db, svc_user):
     assert review.purpose_status == "proposed"
 
 
-def test_changed_source_invalidates_dependent_work_on_resume(svc, svc_db, svc_user):
+def decide_all(svc, db, review):
+    """The demo choices, including an approved proposal."""
+    by = items_by_defect(db, review)
+    d = set_decision(db, review, by["broad_file_access"], "fix")
+    run_until_idle(svc)
+    db.refresh(d)
+    db.refresh(review)
+    approve_proposal(db, review, d)
+    for defect in ("concealment", "reviewer_manipulation", "network_send"):
+        set_decision(db, review, by[defect], "remove")
+
+
+def decision_snapshot(db, review) -> dict:
+    """Decisions keyed by finding identity (title + main path), independent of item ids."""
+    out = {}
+    for item in db.query(ReviewItem).filter_by(session_id=review.id):
+        d = current_decision(db, item.id)
+        key = (item.title, item.locations[0]["path"])
+        out[key] = None if d is None else (d.action, d.is_default, d.approval_status, d.proposed_text)
+    return out
+
+
+def force_rerun_analysis(db, review):
+    for t in db.query(ReviewTask).filter_by(session_id=review.id, stage="analyze"):
+        t.status = "pending"
+    review.stage, review.status = "analyze", "running"
+    db.commit()
+
+
+def test_rerun_with_unchanged_source_and_purpose_keeps_every_decision(svc, svc_db, svc_user):
     review = to_decisions(svc, svc_db, svc_user)
-    by = items_by_defect(svc_db, review)
-    set_decision(svc_db, review, by["network_send"], "remove")
+    decide_all(svc, svc_db, review)
+    before = decision_snapshot(svc_db, review)
+    assert all(v is not None for v in before.values())
+
+    force_rerun_analysis(svc_db, review)
+    run_until_idle(svc)
+    svc_db.refresh(review)
+    assert review.stage == "decisions"
+    assert decision_snapshot(svc_db, review) == before  # choices, approvals and wording all kept
+    assert undecided_items(svc_db, review) == []
+    from skill_validator.db import UserDecision
+
+    assert svc_db.query(UserDecision).filter_by(session_id=review.id).count() == len(before)
+
+
+def test_changed_source_drops_only_affected_decisions(svc, svc_db, svc_user):
+    review = to_decisions(svc, svc_db, svc_user)
+    decide_all(svc, svc_db, review)
+    before = decision_snapshot(svc_db, review)
     review.status = "stopped"
     svc_db.commit()
 
     path = svc.storage.resolve("source", svc_user.id, review.id, "scripts/send_text.py")
     os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
-    path.write_text("print('changed')\n")
-    resume(svc, svc_db, review)
-    assert current_decision(svc_db, by["network_send"].id) is None
-    stale = svc_db.query(ReviewTask).filter_by(session_id=review.id, stage="analyze", status="pending").all()
-    assert any("scripts/send_text.py" in t.target_ref["paths"] for t in stale)
+    path.write_text(path.read_text(encoding="utf-8").replace("collector", "uploader"), encoding="utf-8")
+    assert resume(svc, svc_db, review) == "resumed"
+    assert review.stage == "analyze"  # generation is blocked until the affected group is re-analyzed
+    run_until_idle(svc)
+    svc_db.refresh(review)
+    assert review.stage == "decisions"
+
+    after = decision_snapshot(svc_db, review)
+    script_key = next(k for k in before if k[1] == "scripts/send_text.py")
+    assert after[script_key] is None  # its text changed, so the user must decide again
+    for key, value in before.items():
+        if key != script_key:
+            assert after[key] == value
+    assert [i.locations[0]["path"] for i in undecided_items(svc_db, review)] == ["scripts/send_text.py"]
+
+
+def test_changed_purpose_drops_only_decisions_it_affects(svc, svc_db, svc_user):
+    review = to_decisions(svc, svc_db, svc_user)
+    decide_all(svc, svc_db, review)
+    before = decision_snapshot(svc_db, review)
+
+    # A purpose that needs sending text changes how the script is classified, and makes the
+    # wording proposed for the file-access finding outdated.
+    review.purpose = "לשכתב טקסט ולשלוח אותו ל-API של שירות גיבוי"
+    force_rerun_analysis(svc_db, review)
+    run_until_idle(svc)
+    svc_db.refresh(review)
+
+    after = decision_snapshot(svc_db, review)
+    by_path_title = {k[0]: v for k, v in after.items()}
+    assert by_path_title["גישה רחבה מדי לקבצי המשתמש"] is None  # proposal was written for the old purpose
+    assert all(v is None for k, v in after.items() if k[1] == "scripts/send_text.py")  # reclassified
+    assert by_path_title["הוראה להסתיר פעולה מהמשתמש"] == before[("הוראה להסתיר פעולה מהמשתמש", "SKILL.md")]
+    assert by_path_title["הוראה שמנסה להשפיע על הבודק"] == before[("הוראה שמנסה להשפיע על הבודק", "SKILL.md")]
+    assert by_path_title["סעיף: Style guidelines"] == before[("סעיף: Style guidelines", "SKILL.md")]

@@ -126,6 +126,9 @@ class ReviewItem(Base):
     impact: Mapped[str] = mapped_column(Text, default="")
     recommendation: Mapped[str] = mapped_column(String(20))  # keep / remove / fix / adapt
     sort_key: Mapped[str] = mapped_column(String(600), default="")
+    # Fingerprints used to carry decisions over when a task is re-run (see orchestrator._apply_results).
+    content_hash: Mapped[str] = mapped_column(String(64), default="")  # text at the locations, position-independent
+    purpose_hash: Mapped[str] = mapped_column(String(64), default="")  # purpose the finding was judged against
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

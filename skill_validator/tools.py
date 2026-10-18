@@ -10,6 +10,7 @@ Rules enforced here, in code:
 """
 
 import difflib
+import hashlib
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -204,14 +205,16 @@ def record_finding(
     _check_enum("recommendation", recommendation, RECOMMENDATION)
     if not title.strip() or not locations:
         raise ToolError("title and at least one location are required")
-    clean = []
+    clean, fingerprints = [], []
     for i, loc in enumerate(locations):
         path, start, end = loc.get("path"), loc.get("start"), loc.get("end")
-        total = len(_read_text(ctx, "source", path).splitlines())
+        file_lines = _read_text(ctx, "source", path).splitlines()
+        total = len(file_lines)
         if not (isinstance(start, int) and isinstance(end, int) and 1 <= start <= end <= max(total, 1)):
             raise ToolError(f"location {i}: lines {start}-{end} are outside {path} (1-{total})")
         role = loc.get("role", "main" if i == 0 else "reference")
         clean.append({"path": path, "start": start, "end": end, "role": role})
+        fingerprints.append(f"{role}\0{path}\0" + "\n".join(file_lines[start - 1 : end]))
     item = ReviewItem(
         session_id=ctx.review.id,
         task_id=ctx.task.id,
@@ -228,6 +231,8 @@ def record_finding(
         impact=impact,
         recommendation=recommendation,
         sort_key=f"{clean[0]['path']}:{clean[0]['start']:06d}",
+        content_hash=hashlib.sha256("\x1e".join(sorted(fingerprints)).encode()).hexdigest(),
+        purpose_hash=hashlib.sha256(ctx.review.purpose.encode()).hexdigest(),
     )
     ctx.pending.append(item)
     return {"recorded": True, "count_in_task": sum(isinstance(p, ReviewItem) for p in ctx.pending)}

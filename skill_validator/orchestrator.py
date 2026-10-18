@@ -428,16 +428,47 @@ def _check_task_output(task: ReviewTask, ctx) -> None:
         raise _MissingOutput("no validation result was recorded")
 
 
+def _item_key(item: ReviewItem) -> tuple:
+    return (item.defect_type, item.relevance, item.safety_status, item.content_hash)
+
+
+def _carry_over_decisions(db: Session, review: ReviewSession, old_items: list, new_items: list) -> None:
+    """Keep the user's choices across a re-run; drop only the ones the re-run affected.
+
+    A decision moves to the equivalent new finding: same defect type, same classification and the
+    same text at its locations (line numbers may shift). It is dropped when no equivalent finding
+    exists, when its action is no longer allowed for the new finding, or when it relies on a
+    proposed wording that was written for a different purpose.
+    """
+    pool: dict[tuple, list[ReviewItem]] = {}
+    for new in new_items:
+        pool.setdefault(_item_key(new), []).append(new)
+    for old in old_items:
+        candidates = pool.get(_item_key(old), [])
+        new = candidates.pop(0) if candidates else None
+        for d in db.query(UserDecision).filter_by(item_id=old.id).all():
+            proposal_stale = d.action in ("fix", "adapt") and new is not None and new.purpose_hash != old.purpose_hash
+            if new is None or proposal_stale or d.action not in allowed_actions(new, d):
+                db.delete(d)
+                continue
+            d.item_id = new.id
+            d.source_version = review.source_hash
+    db.flush()
+
+
 def _apply_results(db: Session, review: ReviewSession, task: ReviewTask, ctx) -> None:
-    # Idempotent: a re-run replaces whatever an earlier run of the same task saved.
-    # Decisions on replaced findings no longer apply; defaults are re-created afterwards.
-    old_items = [i.id for i in db.query(ReviewItem.id).filter_by(task_id=task.id)]
-    if old_items:
-        db.query(UserDecision).filter(UserDecision.item_id.in_(old_items)).delete(synchronize_session=False)
-    db.query(ReviewItem).filter_by(task_id=task.id).delete()
+    # Idempotent: a re-run replaces whatever an earlier run of the same task saved, while the
+    # user's decisions on unchanged findings are carried over (see _carry_over_decisions).
+    old_items = db.query(ReviewItem).filter_by(task_id=task.id).all()
     db.query(ValidationResult).filter_by(task_id=task.id).delete()
     for obj in ctx.pending:
         db.add(obj)
+    db.flush()
+    if old_items:
+        new_items = [p for p in ctx.pending if isinstance(p, ReviewItem)]
+        _carry_over_decisions(db, review, old_items, new_items)
+        for old in old_items:
+            db.delete(old)
     if task.stage == "detect_purpose":
         p = ctx.results["purpose"]
         review.purpose, review.purpose_evidence = p["purpose"], p["evidence"]
@@ -567,20 +598,32 @@ def _source_tree_hash(db: Session, review: ReviewSession) -> str:
 
 
 def _invalidate_changed(svc: Services, db: Session, review: ReviewSession) -> None:
-    from .storage import sha256_bytes
+    """The source changed: re-analyze only the affected groups.
+
+    Decisions are not deleted here. The re-run carries over every decision whose finding is
+    unchanged and drops the rest (_carry_over_decisions). Until then generation is blocked,
+    because the review goes back to the analyze stage.
+    """
+    from .storage import sha256_bytes, tree_hash
 
     changed = set()
     for rec in db.query(FileRecord).filter_by(session_id=review.id, area="source"):
         p = svc.storage.resolve("source", review.user_id, review.id, rec.relative_path)
-        if not p.is_file() or sha256_bytes(p.read_bytes()) != rec.hash:
+        if not p.is_file():
             changed.add(rec.relative_path)
-    for item in db.query(ReviewItem).filter_by(session_id=review.id).all():
-        if any(loc["path"] in changed for loc in item.locations):
-            for d in db.query(UserDecision).filter_by(item_id=item.id):
-                db.delete(d)
+            continue
+        current = sha256_bytes(p.read_bytes())
+        if current != rec.hash:
+            changed.add(rec.relative_path)
+            rec.hash, rec.size, rec.coverage_status = current, p.stat().st_size, "pending"
     for t in db.query(ReviewTask).filter_by(session_id=review.id):
         if set((t.target_ref or {}).get("paths", [])) & changed:
             t.status = "stale"
+            t.attempts = 0
+    rows = db.query(FileRecord).filter_by(session_id=review.id, area="source").all()
+    review.source_hash = tree_hash([(r.relative_path, r.hash) for r in rows])
+    if review.stage == "decisions":
+        review.stage = "analyze"
     review.stop_reason = "source_changed"
 
 
