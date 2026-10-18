@@ -1,7 +1,9 @@
 """Storage areas (Architecture.md section 8): quarantine, candidate and delivery, per user and review."""
 
 import hashlib
+import os
 import shutil
+import stat
 from pathlib import Path, PurePosixPath
 
 # Agent tools address areas by name; "source" is the quarantine area.
@@ -63,7 +65,19 @@ class Storage:
         for area in AREA_DIRS:
             d = self.area_dir(area, user_id, session_id)
             if d.exists():
-                shutil.rmtree(d)
+                shutil.rmtree(d, onexc=_make_writable_and_retry)
+
+
+def _make_writable_and_retry(func, path, _exc):
+    # Source and candidate files are read-only; clear the flag so they can be deleted.
+    os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+    func(path)
+
+
+def write_read_only(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    os.chmod(path, stat.S_IREAD)
 
 
 def sha256_bytes(data: bytes) -> str:
