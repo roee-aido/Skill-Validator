@@ -10,10 +10,10 @@
     <fieldset>
       <legend>מה להעלות (אחת מהאפשרויות)</legend>
       <label>קובץ ZIP של הסקיל, או SKILL.md בודד
-        <input type="file" name="files" accept=".zip,.md">
+        <input type="file" name="files" id="file-input" accept=".zip,.md">
       </label>
       <label>או תיקיית סקיל
-        <input type="file" name="files" webkitdirectory multiple>
+        <input type="file" name="files" id="dir-input" webkitdirectory multiple>
       </label>
       <p class="muted">עד {{ intake.max_files }} קבצים, {{ (intake.max_total_bytes / 1048576)|round(1) }}MB אחרי פתיחה, עומק עד {{ intake.max_depth }} תיקיות.
         קבצים בפורמט שאינו נתמך יסומנו "לא נבדק" ולא יועתקו לגרסה המתוקנת.</p>
@@ -31,4 +31,21 @@
     <button>העלאה והתחלת בדיקה</button>
   </form>
 </section>
+<script>
+  // Folder upload: send each file's path relative to the chosen folder explicitly, so the
+  // folder structure reaches the server the same way in every browser.
+  document.querySelector('form[action="/reviews"]').addEventListener("submit", async (ev) => {
+    const dir = document.getElementById("dir-input");
+    if (!dir.files.length) return;
+    ev.preventDefault();
+    const form = ev.target;
+    const body = new FormData();
+    for (const [key, value] of new FormData(form)) if (key !== "files") body.append(key, value);
+    for (const f of document.getElementById("file-input").files) body.append("files", f, f.name);
+    for (const f of dir.files) body.append("files", f, f.webkitRelativePath || f.name);
+    const res = await fetch(form.action, { method: "POST", body });
+    if (res.redirected) { location.href = res.url; return; }
+    document.open(); document.write(await res.text()); document.close();
+  });
+</script>
 {% endblock %}

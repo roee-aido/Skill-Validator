@@ -38,7 +38,7 @@ The agent offers review and repair support. It does not certify that a skill is 
 | [infra/network-allowlist.yaml](infra/network-allowlist.yaml) | Destinations the agent worker may reach (D9). Not part of the agent configuration |
 | [prompts/](prompts/) | System prompt and one prompt per task stage |
 | [skill_validator/](skill_validator/) | Application code: web app, orchestrator, worker, agent loop, tools, intake, scanners, generator, reports |
-| [tests/](tests/) | 81 automated tests (80 pass, 1 skipped on Windows) |
+| [tests/](tests/) | 98 automated tests (97 pass, 1 skipped on Windows) |
 | [demo/](demo/) | Synthetic demo skill, demo and bad archives, expected and actual results |
 | [.env.example](.env.example) | Environment variable names only, no values |
 

@@ -177,6 +177,15 @@ def test_budget_stop_resume_requires_approval_and_never_resets_spend(svc, svc_db
     svc_db.refresh(review)
     assert review.stage == "decisions"
     assert review.spent_cost_total > spent_at_stop
+
+    # No agent run started between the stop and the approval.
+    from skill_validator.db import Checkpoint
+
+    stop_cp = (svc_db.query(Checkpoint).filter(Checkpoint.session_id == review.id,
+               Checkpoint.stop_reason.in_(("budget_exceeded", "budget_insufficient")))
+               .order_by(Checkpoint.created_at).first())
+    for r in svc_db.query(AgentRun).filter_by(session_id=review.id):
+        assert r.started_at <= stop_cp.created_at or r.started_at >= approval.approved_at
     total_runs = sum(r.cost_usd for r in svc_db.query(AgentRun).filter_by(session_id=review.id))
     assert review.spent_cost_total == pytest.approx(total_runs, rel=1e-6)
     # Tasks completed before the stop ran exactly once.

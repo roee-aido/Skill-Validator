@@ -56,9 +56,9 @@
   <form method="post" action="/reviews/{{ review.id }}/ceiling" class="ceiling">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>תקרת טוקנים (עד {{ "{:,}".format(budget.max.tokens) }})
-      <input type="number" name="tokens" min="{{ budget.ceiling.tokens }}" max="{{ budget.max.tokens }}" value="{{ [budget.max.tokens, budget.spent.tokens + 2 * budget.per_task.tokens]|min }}" dir="ltr"></label>
+      <input type="number" name="tokens" min="{{ budget.ceiling.tokens }}" max="{{ budget.max.tokens }}" value="{{ [budget.ceiling.tokens, [budget.max.tokens, budget.spent.tokens + 2 * budget.per_task.tokens]|min]|max }}" dir="ltr"></label>
     <label>תקרת עלות USD (עד {{ budget.max.cost_usd }})
-      <input type="number" step="0.01" name="cost_usd" min="{{ budget.ceiling.cost_usd }}" max="{{ budget.max.cost_usd }}" value="{{ '%.2f'|format([budget.max.cost_usd, budget.spent.cost_usd + 2 * budget.per_task.cost_usd]|min) }}" dir="ltr"></label>
+      <input type="number" step="0.01" name="cost_usd" min="{{ budget.ceiling.cost_usd }}" max="{{ budget.max.cost_usd }}" value="{{ '%.2f'|format([budget.ceiling.cost_usd, [budget.max.cost_usd, budget.spent.cost_usd + 2 * budget.per_task.cost_usd]|min]|max) }}" dir="ltr"></label>
     <label>תקרת זמן עיבוד בדקות (עד {{ budget.max.processing_minutes }})
       <input type="number" step="0.5" name="processing_minutes" min="{{ budget.ceiling.processing_minutes }}" max="{{ budget.max.processing_minutes }}" value="{{ [budget.max.processing_minutes, budget.ceiling.processing_minutes]|max }}" dir="ltr"></label>
     <label class="check"><input type="checkbox" name="confirm" value="yes" required> אני מאשר/ת להגדיל את תקרת התקציב של הסקירה</label>

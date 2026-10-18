@@ -426,8 +426,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Skill Validator web interface (local)")
     parser.add_argument("--config", help="agent config path (default: $SV_CONFIG)")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--data-root", help="data folder relative to the project (default: config/system.yaml)")
     args = parser.parse_args()
-    app = create_app(build_services(args.config))
+    app = create_app(build_services(args.config, args.data_root))
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 

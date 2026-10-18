@@ -367,7 +367,10 @@ def run_task(svc: Services, db: Session, task: ReviewTask) -> str:
     if task.stage == "revalidate":
         ctx.candidate_hash = task.target_ref.get("candidate_hash", "")
     brain = svc.brain_factory(cfg)
-    run = AgentRun(session_id=review.id, task_id=task.id, config_version=cfg.config_version, model_id=brain.model_id)
+    run = AgentRun(
+        session_id=review.id, task_id=task.id, config_version=cfg.config_version, model_id=brain.model_id,
+        started_at=now(),  # the real start, not the time the row is saved
+    )
     meter = Meter(cfg=cfg, review=review)
     outcome, error = "completed", ""
     try:

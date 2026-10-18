@@ -18,10 +18,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Skill Validator agent worker")
     parser.add_argument("--config", help="agent config path (default: $SV_CONFIG)")
     parser.add_argument("--once", action="store_true", help="run pending tasks, then exit")
+    parser.add_argument("--data-root", help="data folder relative to the project (default: config/system.yaml)")
     args = parser.parse_args()
 
     guard = netguard.install()
-    svc = build_services(args.config)
+    svc = build_services(args.config, args.data_root)
     print(f"worker ready: config {svc.agent_cfg.config_version}, model {svc.agent_cfg.model.model_id}, "
           f"network allowlist {sorted(guard.allowed)}", flush=True)
     while True:
