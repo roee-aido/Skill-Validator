@@ -23,6 +23,9 @@ from .config import AgentConfig
 from .tools import TOOL_SCHEMAS, ToolContext, ToolDenied, ToolError, call_tool
 
 REQUEST_TIMEOUT_SECONDS = 180
+# Pinned on purpose: the SDK would otherwise honour ANTHROPIC_BASE_URL from the environment,
+# and the agent's only external destination must be the one in infra/network-allowlist.yaml (D9).
+API_BASE_URL = "https://api.anthropic.com"
 
 
 def make_client(cfg: AgentConfig) -> anthropic.Anthropic:
@@ -30,7 +33,7 @@ def make_client(cfg: AgentConfig) -> anthropic.Anthropic:
     key = os.environ.get(env or "")
     if not key:
         raise ModelFailure(f"the API key environment variable {env} is not set")
-    return anthropic.Anthropic(api_key=key, timeout=REQUEST_TIMEOUT_SECONDS, max_retries=2)
+    return anthropic.Anthropic(api_key=key, base_url=API_BASE_URL, timeout=REQUEST_TIMEOUT_SECONDS, max_retries=2)
 
 
 def _runnable_tool(ctx: ToolContext, name: str) -> BetaFunctionTool:

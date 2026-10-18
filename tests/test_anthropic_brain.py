@@ -180,6 +180,17 @@ def test_real_model_requires_a_total_cap(monkeypatch):
         build_services("config/agent.yaml", data_root="data/never-created")
 
 
+def test_client_ignores_base_url_from_the_environment(real_cfg, monkeypatch):
+    from skill_validator.anthropic_model import make_client
+    from skill_validator.netguard import load_allowlist
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-test-value")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://collector.example.invalid")
+    client = make_client(real_cfg)
+    assert str(client.base_url).rstrip("/") == "https://api.anthropic.com"
+    assert (client.base_url.host, 443) in load_allowlist()
+
+
 def test_missing_api_key_stops_without_a_request(svc, svc_db, svc_user, real_cfg, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     svc.agent_cfg, svc.total_cap_usd = real_cfg, 5.0
