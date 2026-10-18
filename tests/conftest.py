@@ -37,3 +37,28 @@ def user(db):
     db.add(u)
     db.commit()
     return u
+
+
+DEMO_ZIP = PROJECT_ROOT / "demo" / "human-writing-skill.zip"
+
+
+@pytest.fixture
+def demo_review(db, storage, user, system_cfg):
+    """A review with the demo skill already in the source area (intake only, no tasks)."""
+    from skill_validator.db import FileRecord, ReviewSession
+    from skill_validator.intake import collect_upload, write_source
+
+    res = collect_upload([(DEMO_ZIP.name, DEMO_ZIP.read_bytes())], system_cfg.intake, system_cfg.supported_formats)
+    review = ReviewSession(user_id=user.id, skill_name=res.skill_name, source_hash=res.source_hash)
+    db.add(review)
+    db.flush()
+    write_source(storage, user.id, review.id, res)
+    for f in res.files:
+        db.add(
+            FileRecord(
+                session_id=review.id, area="source", relative_path=f.path, type=f.type,
+                size=f.size, hash=f.hash, supported=f.supported,
+            )
+        )
+    db.commit()
+    return review
