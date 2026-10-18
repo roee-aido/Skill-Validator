@@ -23,7 +23,7 @@ The agent offers review and repair support. It does not certify that a skill is 
 | 4 | Orchestrator, tasks, checkpoints, budget and resume, mock model | Done |
 | 5 | Corrected copy, structural check, re-check, reports | Done |
 | 6 | Hebrew RTL web interface and dashboards | Done |
-| 7 | Real model (Claude API) | Not started: waiting for model choice (O1) and budget approval (O14) |
+| 7 | Real model (Claude API) | Implemented and tested offline (real SDK over a mocked transport). First paid run (experiment 1) not run yet |
 | 8 | Demo against the real model and submission | Not started |
 
 ## Repository map
@@ -32,13 +32,13 @@ The agent offers review and repair support. It does not certify that a skill is 
 |---|---|
 | [SPEC.md](SPEC.md) | What the agent must do: user experience, triggers, approval flow, config requirements, demo scenario, acceptance criteria (Hebrew) |
 | [Architecture.md](Architecture.md) | How the system supports the spec: decision register, components, diagrams, tools, data model, checkpoints, verification, local implementation notes (Hebrew) |
-| [config/agent.yaml](config/agent.yaml) | Agent configuration for the real model. Deliberately not runnable yet: open values are `<TBD>` |
+| [config/agent.yaml](config/agent.yaml) | Agent configuration for the real model: `claude-opus-5-5`, effort `medium`, approved for experiment 1 |
 | [config/agent.mock.yaml](config/agent.mock.yaml) | The same configuration with the mock model, used for local runs and tests |
 | [config/system.yaml](config/system.yaml) | Intake limits (O4) and supported formats (O7) |
 | [infra/network-allowlist.yaml](infra/network-allowlist.yaml) | Destinations the agent worker may reach (D9). Not part of the agent configuration |
 | [prompts/](prompts/) | System prompt and one prompt per task stage |
 | [skill_validator/](skill_validator/) | Application code: web app, orchestrator, worker, agent loop, tools, intake, scanners, generator, reports |
-| [tests/](tests/) | 98 automated tests (97 pass, 1 skipped on Windows) |
+| [tests/](tests/) | 108 automated tests (107 pass, 1 skipped on Windows); none calls the API |
 | [demo/](demo/) | Synthetic demo skill, demo and bad archives, expected and actual results |
 | [.env.example](.env.example) | Environment variable names only, no values |
 
@@ -58,7 +58,7 @@ The agent's model, effort, prompts, tools and permissions are defined in one ver
 
 **Tools** (closed list, enforced in code; the configuration can only narrow it): `list_files`, `read_file`, `search_patterns`, `get_references`, `compare_versions` (re-check only), `record_purpose`, `record_finding`, `propose_patch`, `record_validation`. No tool runs code, reaches the network or writes files. The `candidate` area (the corrected copy) is readable only in the `revalidate` stage.
 
-**Model and effort:** open decision O1. They will be set only after verifying availability, capabilities and prices against Anthropic's official documentation and running a small, approved experiment.
+**Model and effort:** `claude-opus-5-5` with effort `medium`, approved for experiment 1 after checking availability, capabilities and prices in Anthropic's official documentation on 19.10.2026 ($4 / $20 per million input / output tokens; thinking is always on and billed as output). No automatic model fallback: a response from any other model stops the task. The final choice (O1) follows the experiment.
 
 ## Run locally (mock model, no API calls)
 
@@ -83,6 +83,23 @@ Start the worker and the web interface in two terminals:
 Open http://127.0.0.1:8765, enter any email, and use the one-time login link printed in the web server's terminal. Upload `demo/human-writing-skill.zip` and follow [demo/EXPECTED.md](demo/EXPECTED.md). To see the operations dashboard, set `SV_ADMIN_EMAILS` to your login email before starting the web server.
 
 Local data (database, uploaded skills, outputs) is written to `data/`, which is git-ignored.
+
+## Run with the real model (paid)
+
+Only with an approved budget. In your own terminal, set the API key and the approved total cap (never commit them):
+
+```powershell
+$env:ANTHROPIC_API_KEY = "<your key>"
+$env:SV_TOTAL_BUDGET_USD = "5"
+```
+
+Free checks first (model availability and exact input token counts; nothing is billed):
+
+```bash
+.venv/Scripts/python -m skill_validator.preflight --config config/agent.yaml
+```
+
+Then start the worker and the web interface with `--config config/agent.yaml --data-root data/experiment1`. The worker refuses to start without the key or the total cap, and stops any task that could push total paid spend past the cap.
 
 ## Known limitations
 
