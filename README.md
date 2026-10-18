@@ -23,7 +23,7 @@ The agent offers review and repair support. It does not certify that a skill is 
 | 4 | Orchestrator, tasks, checkpoints, budget and resume, mock model | Done |
 | 5 | Corrected copy, structural check, re-check, reports | Done |
 | 6 | Hebrew RTL web interface and dashboards | Done |
-| 7 | Real model (Claude API) | Implemented and tested offline (real SDK over a mocked transport). First paid run (experiment 1) not run yet |
+| 7 | Real model (Claude API) | Implemented. Experiment 1, purpose stage: completed on claude-opus-5-5 for $0.071 (see demo/RESULTS.md). Remaining stages not run yet |
 | 8 | Demo against the real model and submission | Not started |
 
 ## Repository map
