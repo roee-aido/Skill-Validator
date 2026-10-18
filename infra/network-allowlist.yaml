@@ -1,0 +1,16 @@
+# D9 - destinations the Agent Worker may reach.
+#
+# This file belongs to the infrastructure layer, not to the agent configuration,
+# and the agent configuration cannot extend it.
+#
+# LOCAL LIMITATION: on this machine the list is enforced only by an in-process
+# Python audit hook (skill_validator/netguard.py). That is a local protection
+# layer, NOT infrastructure-level isolation and not a full replacement for it.
+# Native extensions or other processes are not covered.
+#
+# The database, storage areas and task queue are local files in this setup,
+# so they need no network entries.
+
+allowed:
+  - host: api.anthropic.com
+    port: 443

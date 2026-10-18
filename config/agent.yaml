@@ -1,0 +1,72 @@
+# Agent configuration for the real model (Anthropic, Claude API + Tool Runner).
+#
+# Status: NOT RUNNABLE YET. Model, effort, prices and budgets are open decisions
+# (O1, O5, O14). They will be filled in only after verifying model availability,
+# capabilities and prices against the official documentation (before Phase 7).
+# The loader rejects any "<TBD>" value, so this file cannot start a review today.
+#
+# No secrets in this file: only the NAME of the environment variable that holds
+# the API key. The value is injected at runtime from outside the repository.
+
+config_version: "0.1.0"
+agent_name: "Skill Validator"          # O12
+
+model:
+  provider: anthropic                  # D1
+  model_id: "<TBD>"                    # O1 - after availability check
+  effort: "<TBD>"                      # O1 - only if the chosen model supports it; else null
+  max_output_tokens: "<TBD>"           # O5
+  pricing:                             # USD per million tokens, from official docs
+    input_per_mtok: "<TBD>"
+    output_per_mtok: "<TBD>"
+    source: "<TBD>"                    # URL + date checked
+
+secrets:
+  api_key_env: ANTHROPIC_API_KEY       # name only; the value never lives in the repo
+
+prompts:
+  system: prompts/system.md
+
+stages:
+  detect_purpose:
+    prompt: prompts/tasks/detect_purpose.md
+    tools: [list_files, read_file, record_purpose]
+    read_areas: [source]
+  analyze:
+    prompt: prompts/tasks/analyze.md
+    tools: [list_files, read_file, search_patterns, get_references, record_finding]
+    read_areas: [source]
+  propose_fix:
+    prompt: prompts/tasks/propose_fix.md
+    tools: [read_file, get_references, propose_patch]
+    read_areas: [source]
+  revalidate:
+    prompt: prompts/tasks/revalidate.md
+    tools: [list_files, read_file, search_patterns, get_references, compare_versions, record_validation]
+    read_areas: [source, candidate]
+
+limits:                                # O5 / O14
+  per_task:
+    tokens: "<TBD>"
+    cost_usd: "<TBD>"
+    processing_minutes: "<TBD>"
+  per_review:                          # cumulative ceilings; never reset on resume (D8)
+    tokens: "<TBD>"
+    cost_usd: "<TBD>"
+    processing_minutes: "<TBD>"
+  max_approved_ceiling:                # highest ceiling a user may approve
+    tokens: "<TBD>"
+    cost_usd: "<TBD>"
+    processing_minutes: "<TBD>"
+
+stop_conditions:                       # O5
+  max_agent_turns_per_task: "<TBD>"
+  max_tool_calls_per_task: "<TBD>"
+  max_attempts_per_task: "<TBD>"
+  on_budget_exceeded: checkpoint_and_mark_partial
+  on_tool_error: retry_then_checkpoint
+  on_model_error_or_refusal: checkpoint_and_mark_partial
+
+resume:                                # D8 - fixed; any other value is an error
+  required_remaining: limits.per_task
+  on_insufficient_budget: require_user_ceiling_approval

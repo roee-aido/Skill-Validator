@@ -1,0 +1,13 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Local runtime data (database, uploaded skills, generated outputs)
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

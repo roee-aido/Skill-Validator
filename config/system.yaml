@@ -1,0 +1,15 @@
+# System settings that are not part of the agent configuration.
+
+storage:
+  root: data                           # git-ignored; database and storage areas live here
+
+intake:                                # O4
+  max_files: 100
+  max_total_bytes: 2097152             # 2 MB unpacked
+  max_file_bytes: 524288               # 512 KB per file
+  max_depth: 6
+  max_compression_ratio: 100
+
+supported_formats:                     # O7 - anything else is marked "not checked"
+  extensions: [.md, .txt, .py, .sh, .ps1, .js, .ts, .json, .yaml, .yml, .toml]
+  file_names: [LICENSE, NOTICE, README, COPYING]

@@ -1,0 +1,71 @@
+# Agent configuration for LOCAL testing with a mock model (phases 0-6).
+#
+# The mock model is rule based. It makes no network calls and costs nothing.
+# Token counts and "cost" are SIMULATED so that budgets, stops and resume (D8)
+# can be exercised. The prices below are placeholders, not real prices.
+#
+# Everything else (stages, tools, read areas, stop conditions, resume rules)
+# has the same shape and the same enforcement as the real configuration.
+
+config_version: "0.1.0-mock"
+agent_name: "Skill Validator"
+
+model:
+  provider: mock
+  model_id: mock-rule-based
+  effort: null                         # the mock model has no effort setting
+  max_output_tokens: 4000
+  pricing:
+    input_per_mtok: 4.0
+    output_per_mtok: 20.0
+    source: "placeholder values for simulated cost; not a real price list"
+
+secrets:
+  api_key_env: null                    # the mock model needs no key
+
+prompts:
+  system: prompts/system.md
+
+stages:
+  detect_purpose:
+    prompt: prompts/tasks/detect_purpose.md
+    tools: [list_files, read_file, record_purpose]
+    read_areas: [source]
+  analyze:
+    prompt: prompts/tasks/analyze.md
+    tools: [list_files, read_file, search_patterns, get_references, record_finding]
+    read_areas: [source]
+  propose_fix:
+    prompt: prompts/tasks/propose_fix.md
+    tools: [read_file, get_references, propose_patch]
+    read_areas: [source]
+  revalidate:
+    prompt: prompts/tasks/revalidate.md
+    tools: [list_files, read_file, search_patterns, get_references, compare_versions, record_validation]
+    read_areas: [source, candidate]
+
+limits:
+  per_task:
+    tokens: 200000
+    cost_usd: 1.0
+    processing_minutes: 5
+  per_review:                          # cumulative; never reset on resume (D8)
+    tokens: 2000000
+    cost_usd: 6.0
+    processing_minutes: 20
+  max_approved_ceiling:
+    tokens: 5000000
+    cost_usd: 15.0
+    processing_minutes: 60
+
+stop_conditions:
+  max_agent_turns_per_task: 15
+  max_tool_calls_per_task: 30
+  max_attempts_per_task: 2
+  on_budget_exceeded: checkpoint_and_mark_partial
+  on_tool_error: retry_then_checkpoint
+  on_model_error_or_refusal: checkpoint_and_mark_partial
+
+resume:                                # D8 - fixed; any other value is an error
+  required_remaining: limits.per_task
+  on_insufficient_budget: require_user_ceiling_approval
